@@ -8,7 +8,16 @@ import (
 	"fmt"
 	"bufio"
 	"io"
+	"strings"
+	"github.com/mgutz/str"
+	"net/url"
+	"crypto/md5"
+	"encoding/hex"
 )
+
+const HEADER_DIG = " /dog?"
+
+const URL = "http://blog.test/?"
 
 var log = logrus.New()
 
@@ -123,7 +132,47 @@ func readFileLine(params cmdParams, logChan chan string) (err error) {
 }
 
 func logConsumer(logChan chan string, pvChan, uvChan chan urlData) {
+	for logStr := range logChan {
+		//切割日志字符串,扣除需要上报的信息.
+		data := cutLogFetchData(logStr)
 
+		hasher := md5.New()
+		hasher.Write([]byte(data.refer + data.ua))
+		uid := hex.EncodeToString(hasher.Sum(nil))
+
+		uDta := urlData{data, uid}
+		fmt.Printf("uDta: uid= %s, data = %s\n", uDta.uid, uDta.data)
+		pvChan <- uDta
+		uvChan <- uDta
+	}
+}
+
+func cutLogFetchData(logStr string) digData {
+	logStr = strings.TrimSpace(logStr)
+	pos := str.IndexOf(logStr, HEADER_DIG, 0)
+	if pos == -1 {
+		return digData{}
+	}
+	pos += len(HEADER_DIG)
+	pos2 := str.IndexOf(logStr, " HTTP", pos)
+	if pos2 == -1 {
+		return digData{}
+	}
+	d := str.Substr(logStr, pos, pos2-pos)
+
+	urlInfo, err := url.Parse(URL + d)
+	if err != nil {
+		return digData{}
+	}
+
+	data := urlInfo.Query()
+
+	return digData{
+		time:  data.Get("time"),
+		url:   data.Get("url"),
+		refer: data.Get("refer"),
+		ua:    data.Get("ua"),
+	}
 }
 
 func pvConsumer(pvChan chan urlData, storageChan chan storageBlock) {
