@@ -6,6 +6,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"fmt"
+	"bufio"
+	"io"
 )
 
 var log = logrus.New()
@@ -85,8 +87,39 @@ type storageBlock struct {
 type urlNode struct {
 }
 
-func readFileLine(params cmdParams, logChan chan string) {
+func readFileLine(params cmdParams, logChan chan string) (err error) {
+	//Todo 文件
+	f, err := os.Open(params.logFilePath)
+	if err != nil {
+		log.Warningf("readFileLine open file err= %s", err)
+	}
 
+	defer f.Close()
+
+	count := 0
+
+	//新建一个缓冲区,把内容先放进缓冲区
+	r := bufio.NewReader(f)
+	for {
+		//遇到'\n'结束读取, 但是'\n'也读取进入
+		buf, err := r.ReadString('\n')
+		if err != nil {
+			if err == io.EOF { //文件已经结束
+				time.Sleep(time.Second * 10)
+				log.Infoln("文件读取完毕~ 休息10秒")
+			} else {
+				log.Warningf("文件内容读取错误: err=%s", err)
+			}
+		}
+
+		logChan <- buf
+		log.Infof("buf = %s", buf)
+		count ++
+
+		if count%(1000*params.goroutineNum) == 0 {
+			log.Infof("readFileLine line: %d", count)
+		}
+	}
 }
 
 func logConsumer(logChan chan string, pvChan, uvChan chan urlData) {
