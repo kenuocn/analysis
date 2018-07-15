@@ -161,6 +161,7 @@ func cutLogFetchData(logStr string) digData {
 	d := str.Substr(logStr, pos, pos2-pos)
 
 	urlInfo, err := url.Parse(URL + d)
+	
 	if err != nil {
 		return digData{}
 	}
